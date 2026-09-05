@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Hospital Course — Shared Team App</title>
+<style>
+body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;margin:0;background:#f5f7fb;color:#172033}
+header{background:#17324d;color:white;padding:16px 18px;position:sticky;top:0;z-index:2}
+main{max-width:1000px;margin:auto;padding:16px}
+.card{background:white;border-radius:14px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #0001}
+input,textarea,select,button{font:inherit;width:100%;box-sizing:border-box;padding:10px;margin:5px 0;border:1px solid #ccd3df;border-radius:9px}
+textarea{min-height:80px;resize:vertical}
+button{background:#17324d;color:white;border:0;cursor:pointer}
+button.secondary{background:#e9eef5;color:#172033}
+button.danger{background:#a52b2b}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{width:auto;padding:9px 13px}
+.hidden{display:none}.muted{color:#687386;font-size:.9rem}.patient{padding:12px;border:1px solid #dde3ec;border-radius:10px;margin:8px 0;cursor:pointer}
+h1,h2,h3{margin-top:0}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#edf2f7;margin:2px;font-size:.8rem}
+pre{white-space:pre-wrap;font:inherit;line-height:1.5}
+#toast{position:fixed;bottom:15px;left:50%;transform:translateX(-50%);background:#172033;color:white;padding:10px 15px;border-radius:10px;display:none}
+@media(max-width:650px){.row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header><strong>Hospital Course</strong><span id="userLabel" style="float:right"></span></header>
+<main>
+<section id="loginView" class="card">
+<h2>Team login</h2>
+<p class="muted">Use the account provided by your team administrator.</p>
+<input id="email" type="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+<button onclick="login()">Sign in</button>
+<p id="loginMsg" class="muted"></p>
+</section>
+
+<section id="appView" class="hidden">
+<div class="actions">
+<button onclick="showHome()">Patients</button>
+<button onclick="showNewPatient()">+ New patient</button>
+<button class="secondary" onclick="loadPatients()">Refresh</button>
+<button class="secondary" onclick="exportData()">Export backup</button>
+<button class="secondary" onclick="logout()">Logout</button>
+</div>
+
+<div id="homeView">
+<div class="card"><h2>Patients</h2><div id="patients"></div></div>
+</div>
+
+<div id="patientView" class="hidden">
+<div class="card">
+<h2 id="patientTitle"></h2>
+<div id="patientMeta" class="muted"></div>
+<div class="actions">
+<button onclick="showDaily()">+ Daily update</button>
+<button class="secondary" onclick="showHospitalCourse()">Hospital course</button>
+<button class="secondary" onclick="showHome()">Back</button>
+</div>
+</div>
+<div id="dailyView" class="hidden">
+<div class="card">
+<h3>Daily update</h3>
+<input id="entryDate" type="date">
+<textarea id="activeIssues" placeholder="Active issues"></textarea>
+<textarea id="checkup" placeholder="Daily check up / examination"></textarea>
+<textarea id="antibiotics" placeholder="Antibiotics / antimicrobial therapy"></textarea>
+<textarea id="labs" placeholder="Labs / investigations"></textarea>
+<textarea id="treatment" placeholder="Treatment / interventions"></textarea>
+<textarea id="plan" placeholder="Daily plan"></textarea>
+<textarea id="futurePlan" placeholder="Future plan"></textarea>
+<textarea id="events" placeholder="Events: vomiting, fever, procedures, deterioration, improvement, etc."></textarea>
+<div class="actions"><button onclick="saveDaily()">Save update</button><button class="secondary" onclick="hideDaily()">Cancel</button></div>
+</div>
+</div>
+<div id="courseView" class="hidden">
+<div class="card"><h3>Hospital course</h3><div class="actions"><button onclick="generateCourse()">Generate / refresh</button><button class="secondary" onclick="copyCourse()">Copy</button></div><pre id="course"></pre></div>
+<div class="card"><h3>Daily timeline</h3><div id="timeline"></div></div>
+</div>
+</div>
+
+<div id="newPatientView" class="hidden">
+<div class="card">
+<h2>New patient</h2>
+<input id="pName" placeholder="Patient name / initials">
+<div class="row">
+<input id="mrn" placeholder="MRN / hospital ID">
+<input id="admissionDate" type="date">
+</div>
+<input id="age" placeholder="Age">
+<input id="weight" placeholder="Weight">
+<input id="diagnosis" placeholder="Working diagnosis / main diagnosis">
+<textarea id="background" placeholder="Relevant background / comorbidities"></textarea>
+<div class="actions"><button onclick="createPatient()">Create patient</button><button class="secondary" onclick="showHome()">Cancel</button></div>
+<p class="muted">For real patient data, use only identifiers permitted by your hospital policy.</p>
+</div>
+</div>
+</section>
+</main>
+<div id="toast"></div>
+<script>
+let token="", currentUser="", currentPatient=null, currentCourse="";
+const $=id=>document.getElementById(id);
+function toast(s){$("toast").textContent=s;$("toast").style.display="block";setTimeout(()=>$("toast").style.display="none",2200)}
+async function api(path,opt={}){opt.headers=Object.assign({"Content-Type":"application/json","Authorization":"Bearer "+token},opt.headers||{});let r=await fetch("/api"+path,opt);let t=await r.text();let d;try{d=JSON.parse(t)}catch{d={error:t}}if(!r.ok)throw Error(d.error||"Request failed");return d}
+async function login(){try{let d=await api("/login",{method:"POST",body:JSON.stringify({email:$("email").value.trim(),password:$("password").value})});token=d.token;currentUser=d.user.email;localStorage.setItem("hc_token",token);localStorage.setItem("hc_user",currentUser);$("loginView").classList.add("hidden");$("appView").classList.remove("hidden");$("userLabel").textContent=currentUser;showHome();loadPatients()}catch(e){$("loginMsg").textContent=e.message}}
+async function init(){token=localStorage.getItem("hc_token")||"";currentUser=localStorage.getItem("hc_user")||"";if(!token){return}try{await api("/me");$("loginView").classList.add("hidden");$("appView").classList.remove("hidden");$("userLabel").textContent=currentUser;showHome();loadPatients()}catch{logout()}}
+function logout(){localStorage.removeItem("hc_token");localStorage.removeItem("hc_user");location.reload()}
+function showHome(){$("homeView").classList.remove("hidden");$("patientView").classList.add("hidden");$("newPatientView").classList.add("hidden")}
+function showNewPatient(){$("homeView").classList.add("hidden");$("patientView").classList.add("hidden");$("newPatientView").classList.remove("hidden")}
+async function loadPatients(){try{let d=await api("/patients");$("patients").innerHTML=d.patients.length?d.patients.map(p=>`<div class="patient" onclick='openPatient(${JSON.stringify(p.id)})'><strong>${esc(p.name)}</strong><br><span class="muted">${esc(p.mrn||"No MRN")} · ${esc(p.diagnosis||"No diagnosis")}</span></div>`).join(""):"<p class='muted'>No patients yet.</p>"}catch(e){toast(e.message)}}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+async function createPatient(){try{let d=await api("/patients",{method:"POST",body:JSON.stringify({name:$("pName").value.trim(),mrn:$("mrn").value.trim(),admission_date:$("admissionDate").value,age:$("age").value,weight:$("weight").value,diagnosis:$("diagnosis").value.trim(),background:$("background").value.trim()})});toast("Patient created");openPatient(d.patient.id)}catch(e){toast(e.message)}}
+async function openPatient(id){try{let d=await api("/patients/"+id);currentPatient=d.patient;$("patientTitle").textContent=currentPatient.name;$("patientMeta").textContent=[currentPatient.mrn,currentPatient.admission_date,currentPatient.age,currentPatient.weight,currentPatient.diagnosis].filter(Boolean).join(" · ");$("homeView").classList.add("hidden");$("newPatientView").classList.add("hidden");$("patientView").classList.remove("hidden");hideDaily();showHospitalCourse();generateCourse()}catch(e){toast(e.message)}}
+function showDaily(){$("dailyView").classList.remove("hidden");$("courseView").classList.add("hidden");$("entryDate").value=new Date().toISOString().slice(0,10)}
+function hideDaily(){$("dailyView").classList.add("hidden")}
+function showHospitalCourse(){$("dailyView").classList.add("hidden");$("courseView").classList.remove("hidden")}
+async function saveDaily(){try{await api("/patients/"+currentPatient.id+"/entries",{method:"POST",body:JSON.stringify({entry_date:$("entryDate").value,active_issues:$("activeIssues").value,checkup:$("checkup").value,antibiotics:$("antibiotics").value,labs:$("labs").value,treatment:$("treatment").value,plan:$("plan").value,future_plan:$("futurePlan").value,events:$("events").value})});toast("Daily update saved");["activeIssues","checkup","antibiotics","labs","treatment","plan","futurePlan","events"].forEach(x=>$(x).value="");showHospitalCourse();generateCourse()}catch(e){toast(e.message)}}
+async function generateCourse(){if(!currentPatient)return;try{let d=await api("/patients/"+currentPatient.id+"/course");currentCourse=d.course;$("course").textContent=currentCourse;$("timeline").innerHTML=d.entries.map(e=>`<div class="card"><strong>${esc(e.entry_date)}</strong><div class="muted">Documented by ${esc(e.documented_by||"team")}</div>${renderFields(e)}</div>`).join("")||"<p class='muted'>No daily updates.</p>"}catch(e){toast(e.message)}}
+function renderFields(e){let labels=[["Active issues","active_issues"],["Check up","checkup"],["Antibiotics","antibiotics"],["Labs","labs"],["Treatment","treatment"],["Plan","plan"],["Future plan","future_plan"],["Events","events"]];return labels.filter(x=>e[x[1]]).map(x=>`<p><strong>${x[0]}:</strong><br>${esc(e[x[1]]).replace(/\\n/g,"<br>")}</p>`).join("")}
+async function copyCourse(){try{await navigator.clipboard.writeText(currentCourse);toast("Copied")}catch{toast("Copy failed")}}
+async function exportData(){try{let d=await api("/export");let blob=new Blob([JSON.stringify(d,null,2)],{type:"application/json"});let a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="hospital-course-backup.json";a.click();URL.revokeObjectURL(a.href)}catch(e){toast(e.message)}}
+init();
+</script>
+</body>
+</html>
