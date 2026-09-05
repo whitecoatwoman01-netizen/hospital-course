@@ -1,0 +1,12 @@
+name = "hospital-course-shared"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "hospital-course-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"

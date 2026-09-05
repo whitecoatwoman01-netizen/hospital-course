@@ -1,0 +1,4 @@
+// Run this locally with a temporary Node script or Cloudflare D1 console.
+// IMPORTANT: replace the email and password before running.
+// Passwords are SHA-256 hashed by the application. For stronger security, use
+// Cloudflare Access/SSO in front of the Worker and remove app-level passwords.
